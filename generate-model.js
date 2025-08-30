@@ -18,10 +18,11 @@ const assert = require('assert');
 const logger = pino(pretty({ sync: true }));
 
 let argv = yargs(hideBin(process.argv))
-    .usage('Generate an API model for a library based on the given client code').option('library', {
+    .usage('Generate an API model for a library based on the given client code')
+    .option('library', {
         alias: 'l',
         type: 'string',
-        description: 'Library name (used in require call)'
+        description: 'The name of the library under test'
     })
     .option('client', {
         alias: 'c',
@@ -185,7 +186,7 @@ let argv = yargs(hideBin(process.argv))
 
     function getProxy(obj, path) {
         let proxy = new Proxy(obj, {
-            get: function (target, p, receiver) {
+            get: function (target, p, _) {
                 /* If the property is a Symbol, the corresponding value is directly returned since
                  the original NoRegrets+ does not deal with Symbols. */
                 if (typeof p !== 'string') {
@@ -281,26 +282,64 @@ let argv = yargs(hideBin(process.argv))
         return proxy;
     }
 
-    function getPrefixPairs() {
-        let results = [];
-        for (let i = 0; i < allPaths.length; i++) {
-            if (isCovariant(allPaths[i].path)) {
-                let x = [];
-                let l = allPaths[i].path.length - 1;
-                for (let j = 0; j < allPaths.length; j++) {
-                    if (deepEqual(allPaths[j].path.slice(0, allPaths[j].path.length - 1), allPaths[i].path)
-                        && allPaths[j].path[allPaths[j].path.length - 1].compType === 'call') {
-                        x.push(allPaths[j].path);
-                    }
-                }
-                if (x.length > 1) {
-                    results.push(x);
+    function computeTreeHash(currentNode) {
+        let hashMap = {
+            callChildren: {},
+            newChildren: {},
+            accessPropChildren: {},
+            writePropChildren: {},
+            argChildren: {}
+        };
+
+        for (let k of currentNode.callChildren) {
+            computeTreeHash(currentNode.callChildren[k]);
+            hashMap.callChildren[k] = currentNode.callChildren[k]._hash[0]
+        }
+
+        for (let k of currentNode.newChildren) {
+            computeTreeHash(currentNode.newChildren[k]);
+            hashMap.newChildren[k] = currentNode.newChildren[k]._hash[0]
+        }
+
+        for (let k of currentNode.accessPropChildren) {
+            computeTreeHash(currentNode.accessPropChildren[k]);
+            hashMap.accessPropChildren[k] = currentNode.accessPropChildren[k]._hash[0]
+        }
+
+        for (let k of currentNode.writePropChildren) {
+            computeTreeHash(currentNode.writePropChildren[k]);
+            hashMap.writePropChildren[k] = currentNode.writePropChildren[k]._hash[0]
+        }
+
+        for (let k of currentNode.argChildren) {
+            computeTreeHash(currentNode.argChildren[k]);
+            hashMap.argChildren[k] = currentNode.argChildren[k]._hash[0]
+        }
+
+        currentNode._hash[0] = objectHash(hashMap);
+        currentNode._hash[1] = objectHash(hashMap, {excludeKeys: v => v === 'argChildren'})
+    }
+
+    function updateTreeHash() {
+        // TODO
+    }
+
+    /**
+     * 
+     * Identify the common prefix pairs where only one prefix can be retained in the model
+     */
+    function getPrefixPairNodes(currentNode) {
+        l1: for (let k1 of currentNode.callChildren) {
+            for (let k2 of currentNode.callChildren) {
+                if (k1 !== k2 && currentNode.callChildren[k1]._hash[1] === currentNode.callChildren[k2]._hash[1]
+                    && !currentNode.callChildren[k1]._prefixInRhoRelations && !currentNode.callChildren[k2]._prefixInRhoRelations
+                ) {
+                    delete currentNode.callChildren[k2];
+                    continue l1;
                 }
             }
         }
-        return results;
     }
-
 
 
     function pathInRhoRelations(path) {
@@ -312,10 +351,14 @@ let argv = yargs(hideBin(process.argv))
         return false;
     }
 
-    // function tryRemovePath(currentNode, accumulatedPath) {
-    //     TODO
-
-    // }
+    function tryRemovePath(currentNode, accumulatedPath) {
+        let prefixPairs = getPrefixPairs();
+        for (let p of prefixPairs) {
+            for (let path of allPaths) {
+                removePathsWithPrefix(p[0]);
+            }
+        }
+    }
 
     function compress() {
         let iteration = 0;
@@ -458,7 +501,6 @@ let argv = yargs(hideBin(process.argv))
                 /* Now use Node.js vm APIs */
                 let compiledFunc = vm.runInNewContext(content, undefined, { filename: f });
                 compiledFunc.call(undefined, mockedRequire);
-                new Function('require', content)(mockedRequire);
             } catch (e) {
                 logger.info(`Encountered error in executing ${f}: ` + e);
             }
