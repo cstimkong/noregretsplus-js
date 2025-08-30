@@ -125,35 +125,6 @@ let argv = yargs(hideBin(process.argv))
         logger.info(`Added path: ${JSON.stringify(path)}, type: ${JSON.stringify(type)}`);
     }
 
-    function removePathsWithPrefix(prefix) {
-        assert(prefix[prefix.length - 1].compType === 'call');
-
-        let t = pathTree;
-        for (let pathComp of prefix.slice(0, prefix.length - 1)) {
-            if (pathComp.compType === 'require') {
-                t = t.requireChildren[pathComp.moduleName];
-            }
-            else if (pathComp.compType === 'accessProp') {
-                t = t.accessPropChildren[pathComp.propName];
-            }
-            else if (pathComp.compType === 'writeProp') {
-                t = t.writePropChildren[pathComp.propName];
-            }
-            else if (pathComp.compType === 'arg') {
-                t = t.argChildren[pathComp.callId][pathComp.argId];
-            }
-            else if (pathComp.compType === 'call') {
-                t = t.callChildren[pathComp.callId];
-            }
-            else if (pathComp.compType === 'new') {
-                t = t.newChildren[pathComp.callId];
-            }
-        }
-
-
-        delete t.callChildren[prefix[prefix.length - 1].callId];
-    }
-
 
     function pathTreeToList(currentNode, accumulatedPath, allPaths) {
         if (currentNode.p !== null) {
@@ -293,35 +264,43 @@ let argv = yargs(hideBin(process.argv))
             argChildren: {}
         };
 
+        let inRhoRelations = false;
+
         for (let k of currentNode.callChildren) {
             computeTreeHash(currentNode.callChildren[k], accumulatedPath.concat([currentNode.p]));
-            hashMap.callChildren[k] = currentNode.callChildren[k]._hash[0]
+            hashMap.callChildren[k] = currentNode.callChildren[k]._hash[0];
+            inRhoRelations = inRhoRelations || currentNode.callChildren[k]._prefixInRhoRelations;
         }
 
         for (let k of currentNode.newChildren) {
             computeTreeHash(currentNode.newChildren[k], accumulatedPath.concat([currentNode.p]));
-            hashMap.newChildren[k] = currentNode.newChildren[k]._hash[0]
+            hashMap.newChildren[k] = currentNode.newChildren[k]._hash[0];
+            inRhoRelations = inRhoRelations || currentNode.newChildren[k]._prefixInRhoRelations;
         }
 
         for (let k of currentNode.accessPropChildren) {
             computeTreeHash(currentNode.accessPropChildren[k], accumulatedPath.concat([currentNode.p]));
-            hashMap.accessPropChildren[k] = currentNode.accessPropChildren[k]._hash[0]
+            hashMap.accessPropChildren[k] = currentNode.accessPropChildren[k]._hash[0];
+            inRhoRelations = inRhoRelations || currentNode.accessPropChildren[k]._prefixInRhoRelations;
         }
 
         for (let k of currentNode.writePropChildren) {
             computeTreeHash(currentNode.writePropChildren[k], accumulatedPath.concat([currentNode.p]));
-            hashMap.writePropChildren[k] = currentNode.writePropChildren[k]._hash[0]
+            hashMap.writePropChildren[k] = currentNode.writePropChildren[k]._hash[0];
+            inRhoRelations = inRhoRelations || currentNode.writePropChildren[k]._prefixInRhoRelations;
         }
 
         for (let k of currentNode.argChildren) {
             computeTreeHash(currentNode.argChildren[k], accumulatedPath.concat([currentNode.p]));
-            hashMap.argChildren[k] = currentNode.argChildren[k]._hash[0]
+            hashMap.argChildren[k] = currentNode.argChildren[k]._hash[0];
+            inRhoRelations = inRhoRelations || currentNode.argChildren[k]._prefixInRhoRelations;
         }
+
         currentNode._hash = [];
         currentNode._hash[0] = objectHash(hashMap);
         currentNode._hash[1] = objectHash(hashMap, {excludeKeys: v => v === 'argChildren'});
         currentNode._hashMap = hashMap;
-        currentNode._prefixInRhoRelations = pathInRhoRelations(accumulatedPath.concat([currentNode.p]));
+        currentNode._prefixInRhoRelations = inRhoRelations || pathInRhoRelations(accumulatedPath.concat([currentNode.p]));
     }
 
     function updateTreeHash(currentNode, childType, childKey) {
@@ -352,6 +331,7 @@ let argv = yargs(hideBin(process.argv))
                 if (k1 !== k2 && currentNode.callChildren[k1]._hash[1] === currentNode.callChildren[k2]._hash[1]
                     && !currentNode.callChildren[k1]._prefixInRhoRelations && !currentNode.callChildren[k2]._prefixInRhoRelations
                 ) {
+                    /* Remove all paths with the prefix */
                     delete currentNode.callChildren[k2];
                     removed = true;
                     updateTreeHash(currentNode, 'callChildren', k2);
@@ -555,7 +535,7 @@ let argv = yargs(hideBin(process.argv))
     }
 
     /* compute the hash for each node for convenience of removing paths */
-    computeTreeHash(pathTree);
+    computeTreeHash(pathTree, []);
 
     if (argv.compress) {
         recursivelyRemovePaths(pathTree);
