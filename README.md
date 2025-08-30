@@ -1,11 +1,12 @@
 
 ## The reimplemented NoRegrets+
 
-We have reimplemented the breaking change detection tool NoRegrets+ (fully written in JavaScript), introduced in the paper:
+This repository contains the reimplemented breaking change detection tool NoRegrets+ (fully written in JavaScript), introduced in the paper:
 
 
 - Møller, Anders, and Martin Toldam Torp. "Model-based testing of breaking changes in Node. js libraries." Proceedings of the 2019 27th ACM joint meeting on european software engineering conference and symposium on the foundations of software engineering. 2019.
 
+The original tool is [here](https://github.com/cs-au-dk/noregrets).
 
 ## Usage
 
