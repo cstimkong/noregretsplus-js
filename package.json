@@ -13,8 +13,8 @@
     "check-type": "./check-type.js"
   },
   "dependencies": {
-    "@babel/generator": "^7.27.0",
-    "@babel/parser": "^7.27.0",
+    "@babel/generator": "^7.28.3",
+    "@babel/parser": "^7.28.3",
     "@babel/traverse": "^7.27.0",
     "assert": "^2.1.0",
     "deep-equal": "^2.2.3",
