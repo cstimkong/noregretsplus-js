@@ -332,7 +332,7 @@ function traverseTree(node, rhoRelations) {
                     argArray[x.p.argId] = x.obj;
                 }
             }
-            // Convert the array-like object to a real array
+            /* Convert the array-like object to a real array */
             argArray.length = Object.keys(argArray).length;
             argArray = Array.prototype.slice.call(argArray);
             let thisObj = undefined;

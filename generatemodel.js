@@ -31,7 +31,11 @@ let argv = yargs(hideBin(process.argv))
     })
     .option('mocha', {
         type: 'boolean',
-        description: 'Client JavaScript file or project use mocha as the test framework'
+        description: 'Client JavaScript file or project use Mocha as the test framework'
+    })
+    .option('jest', {
+        type: 'boolean',
+        description: 'Client JavaScript file or project use Jest as the test framework'
     })
     .option('compress', {
         type: 'boolean',
@@ -435,6 +439,7 @@ let argv = yargs(hideBin(process.argv))
         if (nativeModules.indexOf(moduleName) >= 0) {
             return require(moduleName);
         }
+
         let modulePath = findModule(moduleName, argv.client);
         if (!modulePath) {
             throw new Error(`Cannot find the module "${moduleName}"`);
