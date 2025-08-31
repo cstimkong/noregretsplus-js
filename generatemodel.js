@@ -255,6 +255,10 @@ let argv = yargs(hideBin(process.argv))
         return proxy;
     }
 
+    /**
+     * 
+     * Compute the hash for each node in the path tree
+     */
     function computeTreeHash(currentNode, accumulatedPath) {
         let hashMap = {
             callChildren: {},

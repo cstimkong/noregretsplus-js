@@ -15,7 +15,7 @@ The original tool is [here](https://github.com/cs-au-dk/noregrets).
 Run the following command:
 
 ```
-node generate-model.js --library <library path> --client <client path> [--output <output path>] [--compress] [--mocha]
+node generatemodel.js --library <library path> --client <client path> [--output <output path>] [--compress] [--mocha]
 ```
 
 The output model contains paths and ρ-relations, stored in a JSON file.
@@ -25,5 +25,5 @@ The output model contains paths and ρ-relations, stored in a JSON file.
 Run the following command:
 
 ```
-node check-type.js --library <library path> --model <model path> [--output <output path>]
+node regression.js --library <library path> --model <model path> [--output <output path>]
 ```
