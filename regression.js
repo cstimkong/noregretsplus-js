@@ -1,14 +1,14 @@
-'use strict'
 
-const process = require('process');
-const yargs = require('yargs/yargs');
-const {hideBin} = require('yargs/helpers');
-const fs = require('node:fs');
-const deepEqual = require('deep-equal');
-const {getType, getArgumentType, isCovariant} = require('./lib/utils');
-const pretty = require('pino-pretty');
-const pino = require('pino').default;
-const logger = pino(pretty({sync: true}));
+import process from 'process';
+import yargs from 'yargs/yargs';
+import {hideBin} from 'yargs/helpers';
+import fs from 'node:fs';
+import deepEqual from 'deep-equal';
+import {getType, getArgumentType, isCovariant} from './lib/utils';
+import pretty from 'pino-pretty';
+import pino from 'pino';
+
+const logger = pino.default(pretty({sync: true}));
 
 let argv = yargs().usage('Type regression testing based on a given model')
 .option('library', {
@@ -395,7 +395,6 @@ function traverseTree(node, rhoRelations) {
 }
 
 let model = JSON.parse(fs.readFileSync(modelPath, {encoding: 'utf-8'}));
-
 let [modelTree, rhoRelations] = constructModelTree(model);
 
 traverseTree(modelTree, rhoRelations);

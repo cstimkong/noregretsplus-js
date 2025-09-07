@@ -1,23 +1,23 @@
 'use strict'
 
-const deepEqual = require('deep-equal');
-const yargs = require('yargs/yargs')
-const { hideBin } = require('yargs/helpers')
-const fs = require('node:fs');
-const vm = require('node:vm');
-const { getType, getArgumentType, isCovariant, makeRandomString } = require('./lib/utils');
-const process = require('node:process');
-const path = require('node:path');
-const objectHash = require('object-hash');
-const babelParser = require('@babel/parser');
-const babelGenerator = require('@babel/generator').default;
-const babelTraverse = require('@babel/traverse').default;
-const pretty = require('pino-pretty');
-const pino = require('pino').default;
-const assert = require('assert');
+import deepEqual from 'deep-equal';
+import yargs from 'yargs/yargs';
+import { hideBin } from 'yargs/helpers';
+import { existsSync, readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import { getType, getArgumentType, isCovariant, makeRandomString } from './lib/utils';
+import { argv as _argv } from 'node:process';
+import { resolve, dirname, join } from 'node:path';
+import objectHash from 'object-hash';
+import { parse } from '@babel/parser';
+import babelGenerator from '@babel/generator';
+import babelTraverse from '@babel/traverse';
+import pretty from 'pino-pretty';
+import pino from 'pino';
+import assert from 'assert';
 const logger = pino(pretty({ sync: true }));
 
-let argv = yargs(hideBin(process.argv))
+let argv = yargs(hideBin(_argv))
     .usage('Generate an API model for a library based on the given client code')
     .option('library', {
         alias: 'l',
@@ -83,21 +83,21 @@ let argv = yargs(hideBin(process.argv))
         for (let pathComp of path) {
             if (pathComp.compType === 'require') {
                 if (!t.requireChildren[pathComp.moduleName]) {
-                    t.requireChildren[pathComp.moduleName] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: pathTree};
+                    t.requireChildren[pathComp.moduleName] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: pathTree };
                 }
                 t = t.requireChildren[pathComp.moduleName];
             }
 
             if (pathComp.compType === 'accessProp') {
                 if (!t.accessPropChildren[pathComp.propName]) {
-                    t.accessPropChildren[pathComp.propName] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t};
+                    t.accessPropChildren[pathComp.propName] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t };
                 }
                 t = t.accessPropChildren[pathComp.propName];
             }
 
             if (pathComp.compType === 'writeProp') {
                 if (!t.writePropChildren[pathComp.propName]) {
-                    t.writePropChildren[pathComp.propName] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t};
+                    t.writePropChildren[pathComp.propName] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t };
                 }
                 t = t.writePropChildren[pathComp.propName];
             }
@@ -107,7 +107,7 @@ let argv = yargs(hideBin(process.argv))
                     t.argChildren[pathComp.callId] = {};
                 }
                 if (!t.argChildren[pathComp.callId][pathComp.argId]) {
-                    t.argChildren[pathComp.callId][pathComp.argId] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t};
+                    t.argChildren[pathComp.callId][pathComp.argId] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t };
                 }
                 t = t.argChildren[pathComp.callId][pathComp.argId];
             }
@@ -121,7 +121,7 @@ let argv = yargs(hideBin(process.argv))
 
             if (pathComp.compType === 'new') {
                 if (!t.newChildren[pathComp.callId]) {
-                    t.newChildren[pathComp.callId] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t};
+                    t.newChildren[pathComp.callId] = { p: pathComp, callChildren: {}, newChildren: {}, argChildren: {}, accessPropChildren: {}, writePropChildren: {}, type: type, order: order++, parent: t };
                 }
                 t = t.newChildren[pathComp.callId];
             }
@@ -306,7 +306,7 @@ let argv = yargs(hideBin(process.argv))
 
         currentNode._hash = [];
         currentNode._hash[0] = objectHash(hashMap);
-        currentNode._hash[1] = objectHash(hashMap, {excludeKeys: v => v === 'argChildren'});
+        currentNode._hash[1] = objectHash(hashMap, { excludeKeys: v => v === 'argChildren' });
         currentNode._hashMap = hashMap;
         currentNode._prefixInRhoRelations = inRhoRelations || pathInRhoRelations(accumulatedPath.concat([currentNode.p]));
     }
@@ -320,11 +320,11 @@ let argv = yargs(hideBin(process.argv))
         }
 
         currentNode._hash[0] = objectHash(currentNode._hashMap);
-        currentNode._hash[1] = objectHash(currentNode._hashMap, {excludeKeys: v => v === 'argChildren'});
+        currentNode._hash[1] = objectHash(currentNode._hashMap, { excludeKeys: v => v === 'argChildren' });
 
         updateTreeHash(currentNode.parent, currentNode.p.compType + 'Children',
-            currentNode.p.compType === 'call' || currentNode.p.compType === 'arg' ? currentNode.p.callId : 
-            currentNode.p.compType === 'accessProp' || currentNode.p.compType === 'writeProp' ? currentNode.p.propName : currentNode.p.moduleName
+            currentNode.p.compType === 'call' || currentNode.p.compType === 'arg' ? currentNode.p.callId :
+                currentNode.p.compType === 'accessProp' || currentNode.p.compType === 'writeProp' ? currentNode.p.propName : currentNode.p.moduleName
         )
     }
 
@@ -387,23 +387,23 @@ let argv = yargs(hideBin(process.argv))
      * Simulate the behavior of require function to find the module path according to module name and client path.
      */
     function findModule(moduleName, clientPath) {
-        let p = path.resolve(path.dirname(clientPath));
+        let p = resolve(dirname(clientPath));
         if (moduleName.startsWith('.')) {
             if (moduleName.endsWith('.js') || moduleName.endsWith('.cjs')) {
-                let filePath = path.join(p, 'node_modules', moduleName);
-                if (fs.existsSync(filePath)) {
+                let filePath = join(p, 'node_modules', moduleName);
+                if (existsSync(filePath)) {
                     return filePath;
                 } else {
                     return undefined;
                 }
             }
             else {
-                let filePath = path.join(p, 'node_modules', moduleName + '.js');
-                if (fs.existsSync(filePath)) {
+                let filePath = join(p, 'node_modules', moduleName + '.js');
+                if (existsSync(filePath)) {
                     return filePath;
                 }
-                filePath = path.join(p, 'node_modules', moduleName + '.cjs');
-                if (fs.existsSync(filePath)) {
+                filePath = join(p, 'node_modules', moduleName + '.cjs');
+                if (existsSync(filePath)) {
                     return filePath;
                 }
                 return undefined;
@@ -411,22 +411,22 @@ let argv = yargs(hideBin(process.argv))
         }
 
         while (true) {
-            if (fs.existsSync(path.join(p, 'node_modules', moduleName, 'package.json'))) {
-                let packageJsonContent = require(path.join(p, 'node_modules', moduleName, 'package.json'));
+            if (existsSync(join(p, 'node_modules', moduleName, 'package.json'))) {
+                let packageJsonContent = require(join(p, 'node_modules', moduleName, 'package.json'));
                 let entryFile = packageJsonContent.main;
                 if (!entryFile) {
                     entryFile = 'index.js';
                 }
-                if (fs.existsSync(path.join(p, 'node_modules', moduleName, entryFile))) {
-                    return path.join(p, 'node_modules', moduleName, entryFile);
+                if (existsSync(join(p, 'node_modules', moduleName, entryFile))) {
+                    return join(p, 'node_modules', moduleName, entryFile);
                 } else {
                     return undefined;
                 }
             }
-            if (path.resolve(p, '..') === p) {
+            if (resolve(p, '..') === p) {
                 break;
             }
-            p = path.resolve(p, '..');
+            p = resolve(p, '..');
         }
         return undefined;
     }
@@ -460,32 +460,32 @@ let argv = yargs(hideBin(process.argv))
     function getJavaScriptFilesInDirectory(dir) {
         let files = [];
         const getFilesRecursively = (directory) => {
-            const filesInDirectory = fs.readdirSync(directory);
+            const filesInDirectory = readdirSync(directory);
             for (const file of filesInDirectory) {
-                const absolute = path.join(directory, file);
-                if (fs.statSync(absolute).isDirectory()) {
+                const absolute = join(directory, file);
+                if (statSync(absolute).isDirectory()) {
                     getFilesRecursively(absolute);
                 } else if (file.endsWith('.js') || file.endsWith('.cjs')) {
                     files.push(absolute);
                 }
             }
         };
-        getFilesRecursively(path.resolve(dir));
+        getFilesRecursively(resolve(dir));
         return files;
     }
 
     let javaScriptFiles;
-    if (fs.statSync(argv.client).isDirectory()) {
+    if (statSync(argv.client).isDirectory()) {
         javaScriptFiles = getJavaScriptFilesInDirectory(client);
     } else {
-        javaScriptFiles = [path.resolve(client)];
+        javaScriptFiles = [resolve(client)];
     }
 
 
     if (!argv.mocha) {
         javaScriptFiles.forEach(f => {
-            let content = fs.readFileSync(f, { encoding: 'utf-8' });
-            let ast = babelParser.parse(content);
+            let content = readFileSync(f, { encoding: 'utf-8' });
+            let ast = parse(content, { sourceFilename: f });
             babelTraverse(ast, {
                 exit(path) {
                     if (path.isProgram()) {
@@ -509,7 +509,7 @@ let argv = yargs(hideBin(process.argv))
             content = babelGenerator(ast).code;
             try {
                 /* Now use Node.js vm APIs */
-                let compiledFunc = vm.runInNewContext(content, undefined, { filename: f });
+                let compiledFunc = runInNewContext(content, undefined, { filename: f });
                 compiledFunc.call(undefined, mockedRequire);
             } catch (e) {
                 logger.info(`Encountered error in executing ${f}: ` + e);
@@ -518,7 +518,36 @@ let argv = yargs(hideBin(process.argv))
 
     } else {
         javaScriptFiles.forEach(f => {
-            let content = fs.readFileSync(f, { encoding: 'utf-8' });
+            let content = readFileSync(f, { encoding: 'utf-8' });
+            let ast = parse(content, { sourceFilename: f });
+            babelTraverse(ast, {
+                exit(path) {
+                    if (path.isProgram()) {
+                        let funcExpr = babelTypes.functionExpression(
+                            null,
+                            [
+                                babelTypes.identifier('require'),
+                                babelTypes.identifier('describe'),
+                                babelTypes.identifier('it'),
+                                babelTypes.identifier('before'),
+                                babelTypes.identifier('after'),
+                                babelTypes.identifier('beforeEach'),
+                                babelTypes.identifier('afterEach'),
+                                babelTypes.identifier('expect'),
+                                babelTypes.identifier('assert'),
+                            ],
+                            babelTypes.blockStatement(
+                                path.node.body,
+                                path.node.directives
+                            )
+                        );
+                        path.node.body = [babelTypes.parenthesizedExpression(funcExpr)];
+                        path.node.directives = [];
+                        path.skip();
+                    }
+                }
+            });
+
             try {
                 new Function('require', 'describe', 'it', 'expect', 'assert', content)(
                     mockedRequire,
@@ -557,7 +586,7 @@ let argv = yargs(hideBin(process.argv))
         let allPaths = [];
         pathTreeToList(pathTree, [], allPaths);
         allPaths.sort((a, b) => a.order - b.order);
-        fs.writeFileSync(outputPath, JSON.stringify({ paths: allPaths, rhoRelations: rhoRelations }, (k, v) => {
+        writeFileSync(outputPath, JSON.stringify({ paths: allPaths, rhoRelations: rhoRelations }, (k, v) => {
             if (v === Infinity) {
                 return 'Infinity';
             }

@@ -1,5 +1,5 @@
 {
-  "name": "noregretsplus",
+  "name": "noregretsplus-js",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -9,8 +9,8 @@
   "license": "MIT",
   "description": "The Node.js reimplemented version of NoRegrets+",
   "bin": {
-    "generate-model": "./generate-model.js",
-    "check-type": "./check-type.js"
+    "generate-model": "./generatemodel.js",
+    "check-type": "./regression.js"
   },
   "dependencies": {
     "@babel/generator": "^7.28.3",
@@ -24,5 +24,6 @@
     "pino-pretty": "^13.0.0",
     "qs": "^6.14.0",
     "yargs": "^17.7.2"
-  }
+  },
+  "type": "module"
 }
