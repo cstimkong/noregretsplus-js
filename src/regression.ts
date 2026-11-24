@@ -1,16 +1,16 @@
 
 import process from 'process';
 import yargs from 'yargs/yargs';
-import {hideBin} from 'yargs/helpers';
+import { hideBin } from 'yargs/helpers';
 import fs from 'node:fs';
 import deepEqual from 'deep-equal';
-import {getType, getArgumentType, isCovariant} from './lib/utils';
+import { getType, getArgumentType, isCovariant } from './utils.js';
 import pretty from 'pino-pretty';
 import pino from 'pino';
 
-const logger = pino.default(pretty({sync: true}));
+const logger = pino(pretty({sync: true}));
 
-let argv = yargs().usage('Type regression testing based on a given model')
+let argv: any = yargs().usage('Type regression testing based on a given model')
 .option('library', {
     alias: 'l',
     type: 'string',

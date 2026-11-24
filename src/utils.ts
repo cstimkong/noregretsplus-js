@@ -1,10 +1,11 @@
+import type { Path, PathType } from './types.js';
 
 /**
  * Get type of a contravariant path.
  */
-function getType(obj) {
+function getType(obj: any): PathType {
     let type = '';
-    if (obj === null) {   
+    if (obj === null) {
         type = 'null';
     } else if (obj === undefined) {
         type = 'undefined';
@@ -28,23 +29,31 @@ function getType(obj) {
     } else if (typeof obj === 'function') {
         type = 'function';
     }
-    return type;
+
+    return 'error';
+    // return type;
 }
 
 /**
  * Get type of a covariant path.
  */
-function getArgumentType(arg) {
+function getArgumentType(arg: any): PathType {
     if (arg === null) {
         return 'null';
     }
-    if (arg === undefined) {
+    else if (arg === undefined) {
         return 'undefined';
     }
-    if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
-        return {primType: typeof arg, value: arg};
+    else if (typeof arg === 'string') {
+        return { primType: 'string', value: arg };
     }
-    if (arg instanceof Array || Array.isArray(arg)) {
+    else if (typeof arg === 'number') {
+        return { primType: 'number', value: arg }
+    }
+    else if (typeof arg === 'boolean') {
+        return { primType: 'boolean', value: arg };
+    }
+    else if (arg instanceof Array || Array.isArray(arg)) {
         return 'array';
     }
     if (arg instanceof Error) {
@@ -64,14 +73,14 @@ function getArgumentType(arg) {
     } else if (typeof arg === 'function') {
         return 'function';
     }
-    console.log(typeof arg);
-    return typeof arg;
+
+    return 'error';
 }
 
 /**
  * Determine covariance.
  */
-function isCovariant(path) {
+function isCovariant(path: Path) {
     let arrowCount = 0;
     for (let pathComp of path) {
         if (pathComp.compType === 'arg' || pathComp.compType === 'writeProp') {
@@ -84,17 +93,17 @@ function isCovariant(path) {
 /**
  * Make a random string identifier (usually for function calls)
  */
-function makeRandomString(length) {
+function makeRandomString(length: number) {
     let result = '';
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const charactersLength = characters.length;
     let counter = 0;
     while (counter < length) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    counter += 1;
+        result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        counter += 1;
     }
     return result;
 }
 
 
-export default {getType, getArgumentType, isCovariant, makeRandomString};
+export { getType, getArgumentType, isCovariant, makeRandomString };

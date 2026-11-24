@@ -5,19 +5,23 @@ import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { getType, getArgumentType, isCovariant, makeRandomString } from './lib/utils';
-import { argv as _argv } from 'node:process';
+import { getType, getArgumentType, isCovariant, makeRandomString } from './utils.js';
+import { argv as processArgv } from 'node:process';
 import { resolve, dirname, join } from 'node:path';
 import objectHash from 'object-hash';
 import { parse } from '@babel/parser';
 import babelGenerator from '@babel/generator';
 import babelTraverse from '@babel/traverse';
+import { blockStatement, expressionStatement, functionExpression, identifier, parenthesizedExpression } from '@babel/types';
 import pretty from 'pino-pretty';
 import pino from 'pino';
 import assert from 'assert';
+import type { Path, PathComp, TypedAndOrderedPath, Node, PathType, PathRelation, NodeChildType } from './types.js';
+
+
 const logger = pino(pretty({ sync: true }));
 
-let argv = yargs(hideBin(_argv))
+let argv: any = yargs(hideBin(processArgv))
     .usage('Generate an API model for a library based on the given client code')
     .option('library', {
         alias: 'l',
@@ -53,7 +57,7 @@ let argv = yargs(hideBin(_argv))
 (function () {
     let client = argv.client;
 
-    let pathTree = {
+    let pathTree: any = {
         p: null,
         callChildren: {},
         newChildren: {},
@@ -66,7 +70,7 @@ let argv = yargs(hideBin(_argv))
     };
 
     let order = 0;
-    let rhoRelations = [];
+    let rhoRelations: PathRelation[] = [];
 
     let nativeModules = [
         'assert', 'buffer', 'child_process', 'crypto',
@@ -78,7 +82,7 @@ let argv = yargs(hideBin(_argv))
     ];
 
 
-    function addPathAndType(path, type) {
+    function addPathAndType(path: Path, type: PathType) {
         let t = pathTree;
         for (let pathComp of path) {
             if (pathComp.compType === 'require') {
@@ -130,7 +134,7 @@ let argv = yargs(hideBin(_argv))
     }
 
 
-    function pathTreeToList(currentNode, accumulatedPath, allPaths) {
+    function pathTreeToList(currentNode: Node, accumulatedPath: Path, allPaths: TypedAndOrderedPath[]) {
         if (currentNode.p !== null) {
             allPaths.push({ path: accumulatedPath.concat(currentNode.p), type: currentNode.type, order: currentNode.order })
         }
@@ -161,11 +165,11 @@ let argv = yargs(hideBin(_argv))
 
     }
 
-    function getProxy(obj, path) {
-        let proxy = new Proxy(obj, {
+    function getProxy(obj: any, path: Path) {
+        let proxy: any = new Proxy(obj, {
             get: function (target, p, _) {
-                /* If the property is a Symbol, the corresponding value is directly returned since
-                 the original NoRegrets+ does not deal with Symbols. */
+                // If the property is a Symbol, the corresponding value is directly returned since
+                // the original NoRegrets+ does not deal with Symbols.
                 if (typeof p !== 'string') {
                     return target[p];
                 }
@@ -188,7 +192,7 @@ let argv = yargs(hideBin(_argv))
             },
 
             set: function (target, p, newValue) {
-                let newPath = path.concat([{ compType: 'writeProp', propName: p }]);
+                let newPath = path.concat([{ compType: 'writeProp', propName: p as string }]);
                 let type = isCovariant(newPath) ? getType(newValue) : getArgumentType(newValue);
                 addPathAndType(newPath, type);
                 target[p] = newValue;
@@ -225,7 +229,7 @@ let argv = yargs(hideBin(_argv))
                 if (type === 'object' || type === 'function') {
                     return getProxy(result, newPath);
                 } else {
-                    return result
+                    return result;
                 }
             },
 
@@ -263,8 +267,8 @@ let argv = yargs(hideBin(_argv))
      * 
      * Compute the hash for each node in the path tree
      */
-    function computeTreeHash(currentNode, accumulatedPath) {
-        let hashMap = {
+    function computeTreeHash(currentNode: Node, accumulatedPath: Path) {
+        let hashMap: any = {
             callChildren: {},
             newChildren: {},
             accessPropChildren: {},
@@ -274,44 +278,48 @@ let argv = yargs(hideBin(_argv))
 
         let inRhoRelations = false;
 
-        for (let k of currentNode.callChildren) {
+        for (let k in currentNode.callChildren) {
             computeTreeHash(currentNode.callChildren[k], accumulatedPath.concat([currentNode.p]));
             hashMap.callChildren[k] = currentNode.callChildren[k]._hash[0];
             inRhoRelations = inRhoRelations || currentNode.callChildren[k]._prefixInRhoRelations;
         }
 
-        for (let k of currentNode.newChildren) {
+        for (let k in currentNode.newChildren) {
             computeTreeHash(currentNode.newChildren[k], accumulatedPath.concat([currentNode.p]));
             hashMap.newChildren[k] = currentNode.newChildren[k]._hash[0];
             inRhoRelations = inRhoRelations || currentNode.newChildren[k]._prefixInRhoRelations;
         }
 
-        for (let k of currentNode.accessPropChildren) {
+        for (let k in currentNode.accessPropChildren) {
             computeTreeHash(currentNode.accessPropChildren[k], accumulatedPath.concat([currentNode.p]));
             hashMap.accessPropChildren[k] = currentNode.accessPropChildren[k]._hash[0];
             inRhoRelations = inRhoRelations || currentNode.accessPropChildren[k]._prefixInRhoRelations;
         }
 
-        for (let k of currentNode.writePropChildren) {
+        for (let k in currentNode.writePropChildren) {
             computeTreeHash(currentNode.writePropChildren[k], accumulatedPath.concat([currentNode.p]));
             hashMap.writePropChildren[k] = currentNode.writePropChildren[k]._hash[0];
             inRhoRelations = inRhoRelations || currentNode.writePropChildren[k]._prefixInRhoRelations;
         }
 
-        for (let k of currentNode.argChildren) {
-            computeTreeHash(currentNode.argChildren[k], accumulatedPath.concat([currentNode.p]));
-            hashMap.argChildren[k] = currentNode.argChildren[k]._hash[0];
-            inRhoRelations = inRhoRelations || currentNode.argChildren[k]._prefixInRhoRelations;
+        for (let k in currentNode.argChildren) {
+            hashMap.argChildren[k] = hashMap.argChildren[k] || {};
+            for (let argId in currentNode.argChildren[k]) {
+                computeTreeHash(currentNode.argChildren[k][parseInt(argId)], accumulatedPath.concat([currentNode.p]));
+                hashMap.argChildren[k][parseInt(argId)] = currentNode.argChildren[k][parseInt(argId)]._hash[0];
+                inRhoRelations = inRhoRelations || currentNode.argChildren[k][parseInt(argId)]._prefixInRhoRelations;
+            }
+
         }
 
-        currentNode._hash = [];
-        currentNode._hash[0] = objectHash(hashMap);
-        currentNode._hash[1] = objectHash(hashMap, { excludeKeys: v => v === 'argChildren' });
-        currentNode._hashMap = hashMap;
-        currentNode._prefixInRhoRelations = inRhoRelations || pathInRhoRelations(accumulatedPath.concat([currentNode.p]));
+        (currentNode as any)._hash = [];
+        (currentNode as any)._hash[0] = objectHash(hashMap);
+        (currentNode as any)._hash[1] = objectHash(hashMap, { excludeKeys: v => v === 'argChildren' });
+        (currentNode as any)._hashMap = hashMap;
+        (currentNode as any)._prefixInRhoRelations = inRhoRelations || pathInRhoRelations(accumulatedPath.concat([currentNode.p]));
     }
 
-    function updateTreeHash(currentNode, childType, childKey) {
+    function updateTreeHash(currentNode: Node, childType: NodeChildType, childKey: string) {
         assert(currentNode[childType] !== undefined);
         if (!currentNode[childType][childKey]) {
             delete currentNode._hashMap[childType][childKey];
@@ -332,10 +340,10 @@ let argv = yargs(hideBin(_argv))
      * 
      * Identify the common prefix pairs where only one prefix can be retained in the model
      */
-    function tryRemovePaths(currentNode) {
+    function tryRemovePaths(currentNode: Node) {
         let removed = false;
-        l1: for (let k1 of currentNode.callChildren) {
-            for (let k2 of currentNode.callChildren) {
+        l1: for (let k1 in currentNode.callChildren) {
+            for (let k2 in currentNode.callChildren) {
                 if (k1 !== k2 && currentNode.callChildren[k1]._hash[1] === currentNode.callChildren[k2]._hash[1]
                     && !currentNode.callChildren[k1]._prefixInRhoRelations && !currentNode.callChildren[k2]._prefixInRhoRelations
                 ) {
@@ -351,7 +359,7 @@ let argv = yargs(hideBin(_argv))
     }
 
 
-    function pathInRhoRelations(path) {
+    function pathInRhoRelations(path: Path) {
         for (let r of rhoRelations) {
             if (deepEqual(r[0], path) || deepEqual(r[1], path)) {
                 return true;
@@ -361,7 +369,7 @@ let argv = yargs(hideBin(_argv))
     }
 
 
-    function recursivelyRemovePaths(currentNode) {
+    function recursivelyRemovePaths(currentNode: Node) {
         if (!tryRemovePaths(currentNode)) {
             for (let k in currentNode.callChildren) {
                 recursivelyRemovePaths(currentNode.callChildren[k]);
@@ -386,7 +394,7 @@ let argv = yargs(hideBin(_argv))
      * 
      * Simulate the behavior of require function to find the module path according to module name and client path.
      */
-    function findModule(moduleName, clientPath) {
+    function findModule(moduleName: string, clientPath: string) {
         let p = resolve(dirname(clientPath));
         if (moduleName.startsWith('.')) {
             if (moduleName.endsWith('.js') || moduleName.endsWith('.cjs')) {
@@ -431,7 +439,7 @@ let argv = yargs(hideBin(_argv))
         return undefined;
     }
 
-    function mockedRequire(moduleName) {
+    function mockedRequire(moduleName: string) {
         /* For native modules, directly import them */
         if (moduleName.startsWith('node:')) {
             return require(moduleName);
@@ -447,7 +455,7 @@ let argv = yargs(hideBin(_argv))
 
         if (moduleName === argv.library) {
             let lib = require(modulePath);
-            let initPath = [{ compType: 'require', moduleName: moduleName }]
+            let initPath: Path = [{ compType: 'require', moduleName: moduleName }]
             let proxiedLib = getProxy(lib, initPath);
             let type = getType(lib);
             addPathAndType(initPath, type);
@@ -457,9 +465,9 @@ let argv = yargs(hideBin(_argv))
         }
     }
 
-    function getJavaScriptFilesInDirectory(dir) {
-        let files = [];
-        const getFilesRecursively = (directory) => {
+    function getJavaScriptFilesInDirectory(dir: string) {
+        let files: string[] = [];
+        const getFilesRecursively = (directory: string) => {
             const filesInDirectory = readdirSync(directory);
             for (const file of filesInDirectory) {
                 const absolute = join(directory, file);
@@ -489,17 +497,17 @@ let argv = yargs(hideBin(_argv))
             babelTraverse(ast, {
                 exit(path) {
                     if (path.isProgram()) {
-                        let funcExpr = babelTypes.functionExpression(
+                        let funcExpr = functionExpression(
                             null,
                             [
-                                babelTypes.identifier('require'),
+                                identifier('require'),
                             ],
-                            babelTypes.blockStatement(
+                            blockStatement(
                                 path.node.body,
                                 path.node.directives
                             )
                         );
-                        path.node.body = [babelTypes.parenthesizedExpression(funcExpr)];
+                        path.node.body = [expressionStatement(parenthesizedExpression(funcExpr))];
                         path.node.directives = [];
                         path.skip();
                     }
@@ -520,28 +528,28 @@ let argv = yargs(hideBin(_argv))
         javaScriptFiles.forEach(f => {
             let content = readFileSync(f, { encoding: 'utf-8' });
             let ast = parse(content, { sourceFilename: f });
-            babelTraverse(ast, {
+            babelTraverse.default(ast, {
                 exit(path) {
                     if (path.isProgram()) {
-                        let funcExpr = babelTypes.functionExpression(
+                        let funcExpr = functionExpression(
                             null,
                             [
-                                babelTypes.identifier('require'),
-                                babelTypes.identifier('describe'),
-                                babelTypes.identifier('it'),
-                                babelTypes.identifier('before'),
-                                babelTypes.identifier('after'),
-                                babelTypes.identifier('beforeEach'),
-                                babelTypes.identifier('afterEach'),
-                                babelTypes.identifier('expect'),
-                                babelTypes.identifier('assert'),
+                                identifier('require'),
+                                identifier('describe'),
+                                identifier('it'),
+                                identifier('before'),
+                                identifier('after'),
+                                identifier('beforeEach'),
+                                identifier('afterEach'),
+                                identifier('expect'),
+                                identifier('assert'),
                             ],
-                            babelTypes.blockStatement(
+                            blockStatement(
                                 path.node.body,
                                 path.node.directives
                             )
                         );
-                        path.node.body = [babelTypes.parenthesizedExpression(funcExpr)];
+                        path.node.body = [expressionStatement(parenthesizedExpression(funcExpr))];
                         path.node.directives = [];
                         path.skip();
                     }
@@ -551,11 +559,11 @@ let argv = yargs(hideBin(_argv))
             try {
                 new Function('require', 'describe', 'it', 'expect', 'assert', content)(
                     mockedRequire,
-                    function (message, cb) {
+                    function (message: any, cb: Function) {
                         logger.info(`Executing: ${message}`);
                         cb();
                     },
-                    function (message, cb) {
+                    function (message: any, cb: Function) {
                         logger.info(`Executing test: ${message}`);
                         if (cb.length === 1) {
                             cb(function () { });
@@ -573,17 +581,17 @@ let argv = yargs(hideBin(_argv))
     }
 
     /* compute the hash for each node for convenience of removing paths */
-    computeTreeHash(pathTree, []);
+    // computeTreeHash(pathTree, []);
 
-    if (argv.compress) {
-        recursivelyRemovePaths(pathTree);
-    }
+    // if (argv.compress) {
+    //     recursivelyRemovePaths(pathTree);
+    // }
 
     logger.info('Rho relations: ' + JSON.stringify(rhoRelations));
 
     let outputPath = argv.output;
     if (outputPath) {
-        let allPaths = [];
+        let allPaths: TypedAndOrderedPath[] = [];
         pathTreeToList(pathTree, [], allPaths);
         allPaths.sort((a, b) => a.order - b.order);
         writeFileSync(outputPath, JSON.stringify({ paths: allPaths, rhoRelations: rhoRelations }, (k, v) => {
