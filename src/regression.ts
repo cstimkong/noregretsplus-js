@@ -7,6 +7,14 @@ import deepEqual from 'deep-equal';
 import { getType, getArgumentType, isCovariant } from './utils.js';
 import pretty from 'pino-pretty';
 import pino from 'pino';
+import type { Model, Path, PathType, Node, PathComp } from './types.js';
+import assert from 'node:assert';
+
+interface TraverseNode extends Node {
+    processed?: boolean,
+    obj?: any,
+    ap?: Path
+};
 
 const logger = pino(pretty({sync: true}));
 
@@ -30,49 +38,101 @@ let argv: any = yargs().usage('Type regression testing based on a given model')
 
 let modelPath = argv.model;
 
+function getChild(currentNode: Node, c: PathComp): Node | null {
+    if (c.compType === 'arg' && currentNode.argChildren && currentNode.argChildren[c.callId]) {
+        if (currentNode.argChildren[c.callId]![c.argId]) {
+            return currentNode.argChildren[c.callId]![c.argId]!;
+        }
+        return null;
+    }
+
+    else if (c.compType === 'accessProp' && currentNode.accessPropChildren && currentNode.accessPropChildren[c.propName]) {
+        return currentNode.accessPropChildren[c.propName]!;
+    }
+
+    else if (c.compType === 'call' && currentNode.callChildren && currentNode.callChildren[c.callId]) {
+        return currentNode.callChildren[c.callId]!;
+    }
+
+    else if (c.compType === 'new' && currentNode.newChildren && currentNode.newChildren[c.callId]) {
+        return currentNode.newChildren[c.callId]!;
+    }
+
+    else if (c.compType == 'writeProp' && currentNode.writePropChildren && currentNode.writePropChildren[c.propName]) {
+        return currentNode.writePropChildren[c.propName]!;
+    }
+    
+    else if (c.compType === 'require' && currentNode.requireChildren && currentNode.requireChildren[c.moduleName]) {
+        return currentNode.requireChildren[c.moduleName]!;
+    }
+
+    return null;
+}
 /**
  * Construct a model tree from the generated model.
  */
-function constructModelTree(modelContent) {
+function constructModelTree(modelContent: Model) {
     let paths = modelContent.paths;
-    let root = {children: [], parent: null};
-    for (let [idx, {path, type}] of paths.entries()) {
+    let root: TraverseNode = {
+        argChildren: {},
+        callChildren: {},
+        newChildren: {},
+        accessPropChildren: {},
+        writePropChildren: {},
+        parent: null
+    };
+    for (let {path, type} of paths) {
         let current = root;
-        let accumulatedPath = []
-        for (let i = 0; i < path.length; i++) {
-            accumulatedPath = accumulatedPath.concat([path[i]])
-            let j = 0;
-            for (; j < current.children.length; j++) {
-                if (deepEqual(current.children[j].p, path[i])) {
-                    break;
-                }
-            }
-            if (j === current.children.length) {
-                let newItem = {p: path[i], ap: accumulatedPath, children: [], parent: current};
-                if (i === path.length - 1) {
+        let accumulatedPath: Path = [];
+        path.forEach((comp, idx) => {
+            accumulatedPath = accumulatedPath.concat([comp]);
+            let c = getChild(current, comp);
+            if (c !== null) {
+                current = c;
+            } else {
+                let newItem: TraverseNode = {p: comp, ap: accumulatedPath, 
+                    argChildren: {}, 
+                    requireChildren: {},
+                    callChildren: {},
+                    newChildren: {},
+                    accessPropChildren: {},
+                    writePropChildren: {},
+                    parent: current
+                };
+                if (idx === path.length - 1) {
                     newItem.type = type;
                     newItem.order = idx;
                 }
-                current.children.push(newItem);
+                if (comp.compType == 'accessProp') {
+                    current.accessPropChildren![comp.propName!] = newItem;
+                }
+                else if (comp.compType === 'writeProp') {
+                    current.writePropChildren![comp.propName] = newItem;
+                }
+                else if (comp.compType === 'call') {
+                    current.callChildren![comp.callId] = newItem;
+                }
+                else if (comp.compType == 'arg') {
+                    current.argChildren![comp.callId] = current.argChildren![comp.callId] || {};
+                    current.argChildren![comp.callId]![comp.argId] = newItem;
+                }
+                else if (comp.compType === 'new') {
+                    current.callChildren![comp.callId] = newItem;
+                }
+                else if (comp.compType === 'require') {
+                    current.requireChildren![comp.moduleName] = newItem;
+                }
                 current = newItem;
-            } else {
-                current = current.children[j];
             }
-        }
+        });
     }
 
-    let newRhoRelations = []
+    let newRhoRelations = [];
     for (let [s, t] of modelContent.rhoRelations) {
         let current = root;
         for (let pathComp of s) {
-            let c = undefined;
-            for (let x of current.children) {
-                if (deepEqual(x.p, pathComp)) {
-                    c = x;
-                    break;
-                }
-            }
-            if (c === undefined) {
+            let c = getChild(current, pathComp);
+            if (!c) {
                 throw new Error('Incorrect path.')
             }
             current = c;
@@ -81,14 +141,8 @@ function constructModelTree(modelContent) {
 
         current = root;
         for (let pathComp of t) {
-            let c = undefined;
-            for (let x of current.children) {
-                if (deepEqual(x.p, pathComp)) {
-                    c = x;
-                    break;
-                }
-            }
-            if (c === undefined) {
+            let c = getChild(current, pathComp);
+            if (!c) {
                 throw new Error('Incorrect path.');
             }
             current = c;
@@ -104,7 +158,7 @@ function constructModelTree(modelContent) {
 /**
  * Proxify the synthesized object for an argument node
  */
-function getProxy(node, obj) {
+function getProxy(node: TraverseNode, obj: any) {
     return new Proxy(obj, {
         get: function(target, p, receiver) {
             for (let x of node.children) {
@@ -129,54 +183,55 @@ function getProxy(node, obj) {
 /**
  * Synthesize value for an argument node.
  */
-function synthesizeValue(node) {
+function synthesizeValue(node: TraverseNode) {
     if (node.type === 'undefined') {
         return undefined;
     }
-    if (node.type === 'null') {
+    else if (node.type === 'null') {
         return null;
     }
-    if (node.type === 'object' || node.type === 'array' || node.type === 'set' || node.type === 'map' || node.type === 'boolean' || node.type === 'number' || node.type === 'string') {
+    else if (node.type === 'object' || node.type === 'array' || node.type === 'set' || node.type === 'map' || node.type === 'boolean' || node.type === 'number' || node.type === 'string') {
         return getProxy(node, {});
     }
-    if (node.type === 'function') {
+    else if (node.type === 'function') {
 
         return getProxy(node, function() {
-            for (let x of node.children) {
-                if (x.p.compType === 'call') {
-                    if (!x.processed) {
-                        x.obj = synthesizeValue(x);
-                        x.processed = true;
-                    }
-                    let argTypes = {}
-                    for (let t of node.children) {
-                        if (t.p.compType === 'arg' && t.p.callId === x.p.callId) {
-                            argTypes[t.p.argId] = t.type;
-                        }
-                    }
-                    argTypes.length = Object.keys(argTypes).length;
-                    argTypes = Array.prototype.slice.call(argTypes);
-                    let realArgumentTypes = []
-                    for (let i = 0; i < arguments.length; i++) {
-                        realArgumentTypes.push(isCovariant(x.ap) ? getArgumentType(arguments[i]) : getType(arguments[i]));
-                    }
+            for (let callId in node.callChildren) {
 
-                    if (checkAllCompatible(realArgumentTypes, argTypes)) {
-                        return x.obj;
-                    }
-                    
+                if (!(node.callChildren[callId]! as TraverseNode).processed) {
+                    (node.callChildren[callId]! as TraverseNode).obj = synthesizeValue(node.callChildren[callId] as TraverseNode);
+                    (node.callChildren[callId]! as TraverseNode).processed = true;
                 }
+                let argTypes: any = {};
+                if (node.argChildren && node.argChildren![callId]) {
+                    for (let argId in node.argChildren![callId]!) {
+                        
+                        argTypes[argId] = node.argChildren![callId]![argId]!.type;
+                    }
+                }
+                
+                argTypes.length = Object.keys(argTypes).length;
+                argTypes = Array.prototype.slice.call(argTypes);
+                let realArgumentTypes: PathType[] = [];
+                for (let i = 0; i < arguments.length; i++) {
+                    realArgumentTypes.push(isCovariant((node.callChildren[callId]! as TraverseNode).ap!) ? getArgumentType(arguments[i]) : getType(arguments[i]));
+                } 
+
+                if (checkAllCompatible(realArgumentTypes, argTypes)) {
+                    return (node.callChildren[callId]! as TraverseNode).obj;
+                }
+                    
             }
-            logger.warn({breakingPath: node.ap.concat([{compType: 'call', callId: null}])})
+            logger.warn({breakingPath: node.ap!.concat([{compType: 'call', callId: 'unknown'}])});
             return 0;
         });
 
     }
-    if (node.type.primType) {
-        if (node.type.primType === 'number' && node.type.value === 'Infinity') {
+    else if (typeof node.type === 'object' && node.type!.primType) {
+        if (node.type.primType === 'number' && node.type!.value === 'Infinity') {
             return Number.POSITIVE_INFINITY;
         }
-        if (node.type.primType === 'number' && node.type.value === 'NaN') {
+        if (node.type.primType === 'number' && node.type!.value === 'NaN') {
             return Number.NaN;
         }
         return node.type.value;
@@ -188,8 +243,8 @@ function synthesizeValue(node) {
 /**
  * Check whether the first type is a subtype of the second type
  */
-function checkCompatible(type1, type2) {
-    if (type2 === null) {
+function checkCompatible(type1: PathType, type2: PathType) {
+    if (type2 === 'null') {
         return true;
     }
     if (type2 === 'object') {
@@ -206,16 +261,17 @@ function checkCompatible(type1, type2) {
     return false;
 }
 
-function checkAllCompatible(types1, types2) {
-    for (let i = 0; i < types1.length; i++) {
-        if (!checkCompatible(types1[i], types2[i])) {
+function checkAllCompatible(types1: PathType[], types2: PathType[]) {
+    assert(types1.length === types2.length);
+    types1.forEach((t1, idx) => {
+        if (!checkCompatible(t1, types2[idx]!)) {
             return false;
         }
-    }
+    });
     return true;
 }
 
-function findNextNode(currentNode) {
+function findNextNode(currentNode: TraverseNode) {
     let minNode = undefined;
     for (let c of currentNode.children) {
         if (!c.processed) {
@@ -237,7 +293,7 @@ function findNextNode(currentNode) {
     return minNode;
 }
 
-function traverseTree(node, rhoRelations) {
+function traverseTree(node: TraverseNode, rhoRelations) {
     logger.info('Processing node path: ' + JSON.stringify(node.ap));
 
     if (node.parent === null || node.parent === undefined) {

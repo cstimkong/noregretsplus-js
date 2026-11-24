@@ -528,7 +528,7 @@ let argv: any = yargs(hideBin(processArgv))
         javaScriptFiles.forEach(f => {
             let content = readFileSync(f, { encoding: 'utf-8' });
             let ast = parse(content, { sourceFilename: f });
-            babelTraverse.default(ast, {
+            babelTraverse(ast, {
                 exit(path) {
                     if (path.isProgram()) {
                         let funcExpr = functionExpression(
