@@ -13,7 +13,8 @@ import assert from 'node:assert';
 interface TraverseNode extends Node {
     processed?: boolean,
     obj?: any,
-    ap?: Path
+    ap?: Path,
+    empty?: boolean
 };
 
 const logger = pino(pretty({sync: true}));
@@ -38,7 +39,7 @@ let argv: any = yargs().usage('Type regression testing based on a given model')
 
 let modelPath = argv.model;
 
-function getChild(currentNode: Node, c: PathComp): Node | null {
+function getChild(currentNode: TraverseNode, c: PathComp): Node | null {
     if (c.compType === 'arg' && currentNode.argChildren && currentNode.argChildren[c.callId]) {
         if (currentNode.argChildren[c.callId]![c.argId]) {
             return currentNode.argChildren[c.callId]![c.argId]!;
@@ -67,6 +68,16 @@ function getChild(currentNode: Node, c: PathComp): Node | null {
     }
 
     return null;
+}
+
+function getChildren(currentNode: TraverseNode): TraverseNode[] {
+    return Object.values(currentNode.accessPropChildren!).concat(
+        Object.values(currentNode.writePropChildren!),
+        Object.values(currentNode.callChildren!),
+        Object.values(currentNode.newChildren!),
+        Object.values(currentNode.argChildren!).map(x => Object.values(x)).flatMap(x => x),
+        Object.values(currentNode.requireChildren!)
+    )
 }
 /**
  * Construct a model tree from the generated model.
@@ -127,7 +138,7 @@ function constructModelTree(modelContent: Model) {
         });
     }
 
-    let newRhoRelations = [];
+    let nodeRelations = [];
     for (let [s, t] of modelContent.rhoRelations) {
         let current = root;
         for (let pathComp of s) {
@@ -148,11 +159,11 @@ function constructModelTree(modelContent: Model) {
             current = c;
         }
         let node2 = current;
-        newRhoRelations.push([node1, node2]);
+        nodeRelations.push([node1, node2]);
 
     }
 
-    return [root, newRhoRelations];
+    return [root, nodeRelations];
 }
 
 /**
@@ -161,16 +172,15 @@ function constructModelTree(modelContent: Model) {
 function getProxy(node: TraverseNode, obj: any) {
     return new Proxy(obj, {
         get: function(target, p, receiver) {
-            for (let x of node.children) {
-                if (x.p.compType === 'accessProp' && x.p.propName === p) {
-                    if (!x.processed) {
-                        x.obj = synthesizeValue(x);
-                        x.processed = true;
-                    }
-                    return x.obj;
+            if (node.accessPropChildren![p as string]) {
+                if (!(node.accessPropChildren![p as string] as TraverseNode).processed) {
+                    (node.accessPropChildren![p as string] as TraverseNode).obj = synthesizeValue(node.accessPropChildren![p as string] as TraverseNode);
+                    (node.accessPropChildren![p as string] as TraverseNode).processed = true;
                 }
+                return (node.accessPropChildren![p as string] as TraverseNode).obj;
             }
-            logger.warn({breakingPath: node.ap.concat([{compType: 'accessProp', propName: p}]), additionalProp: p})
+
+            logger.warn({breakingPath: node.ap!.concat([{compType: 'accessProp', propName: p as string}]), additionalProp: p})
             return null;
         },
         apply: function(target, thisArg, argArray) {
@@ -273,12 +283,12 @@ function checkAllCompatible(types1: PathType[], types2: PathType[]) {
 
 function findNextNode(currentNode: TraverseNode) {
     let minNode = undefined;
-    for (let c of currentNode.children) {
+    for (let c of getChildren(currentNode)) {
         if (!c.processed) {
             if (!minNode) {
                 minNode = c;
             } else {
-                minNode = c.order < minNode.order ? c : minNode;
+                minNode = c.order! < minNode.order ? c : minNode;
             }
         } else {
             let m = findNextNode(c);
@@ -293,20 +303,20 @@ function findNextNode(currentNode: TraverseNode) {
     return minNode;
 }
 
-function traverseTree(node: TraverseNode, rhoRelations) {
+function traverseTree(node: TraverseNode, rhoRelations: Node[][]) {
     logger.info('Processing node path: ' + JSON.stringify(node.ap));
 
-    if (node.parent === null || node.parent === undefined) {
-        for (let c of node.children) {
+    if (!node.parent) {
+        for (let c of getChildren(node)) {
             traverseTree(c, rhoRelations);
         }
         return;
     }
 
-   else if (node.p.compType === 'require') {
+   else if (node.p!.compType === 'require') {
         if (!node.processed) {
-            let o = require(node.p.moduleName);
-            if (!checkCompatible(getType(o), node.type)) {
+            let o = require(node.p!.moduleName);
+            if (!checkCompatible(getType(o), node.type!)) {
                 logger.warn({breakingPath: node.ap});
             }
             node.obj = o;
@@ -314,7 +324,7 @@ function traverseTree(node: TraverseNode, rhoRelations) {
         }
     }
 
-    else if (node.p.compType === 'accessProp') {
+    else if (node.p!.compType === 'accessProp') {
         if (!node.processed) {
             if (!node.parent.empty) {
                 if (node.parent.obj !== undefined) {
