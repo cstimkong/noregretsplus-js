@@ -84,8 +84,8 @@ let argv: any = yargs(hideBin(processArgv))
                         construct: {}
                     },
                     parent: null,
-                    moduleName: pathComp.moduleName,
-                    p: { compType: 'require', moduleName: pathComp.moduleName },
+                    moduleName: pathComp.moduleName!,
+                    p: { compType: 'require', moduleName: pathComp.moduleName! },
                     type: type,
                     order: order++
                 };
@@ -93,41 +93,41 @@ let argv: any = yargs(hideBin(processArgv))
             }
 
             else if (pathComp.compType === 'accessProp') {
-                if (!t!.children.accessProp[pathComp.propName]) {
-                    t!.children.accessProp[pathComp.propName] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
+                if (!t!.children.accessProp[pathComp.propName!]) {
+                    t!.children.accessProp[pathComp.propName!] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
                 }
-                t = t!.children.accessProp[pathComp.propName]!;
+                t = t!.children.accessProp[pathComp.propName!]!;
             }
 
             if (pathComp.compType === 'writeProp') {
-                if (!t!.children.writeProp[pathComp.propName]) {
-                    t!.children.writeProp[pathComp.propName] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
+                if (!t!.children.writeProp[pathComp.propName!]) {
+                    t!.children.writeProp[pathComp.propName!] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
                 }
-                t = t!.children.writeProp[pathComp.propName]!;
+                t = t!.children.writeProp[pathComp.propName!]!;
             }
 
             if (pathComp.compType === 'arg') {
-                if (!t!.children.arg[pathComp.callId]) {
-                    t!.children.arg[pathComp.callId] = {};
+                if (!t!.children.arg[pathComp.callId!]) {
+                    t!.children.arg[pathComp.callId!] = {};
                 }
-                if (!t!.children.arg[pathComp.callId]![pathComp.argId]) {
-                    t!.children.arg[pathComp.callId]![pathComp.argId] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
+                if (!t!.children.arg[pathComp.callId!]![pathComp.argId!]) {
+                    t!.children.arg[pathComp.callId!]![pathComp.argId!] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
                 }
-                t = t!.children.arg[pathComp.callId]![pathComp.argId]!;
+                t = t!.children.arg[pathComp.callId!]![pathComp.argId!]!;
             }
 
             if (pathComp.compType === 'call') {
-                if (!t!.children.call[pathComp.callId]) {
-                    t!.children.call[pathComp.callId] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
+                if (!t!.children.call[pathComp.callId!]) {
+                    t!.children.call[pathComp.callId!] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
                 }
-                t = t!.children.call[pathComp.callId]!;
+                t = t!.children.call[pathComp.callId!]!;
             }
 
             if (pathComp.compType === 'construct') {
-                if (!t!.children.construct[pathComp.callId]) {
-                    t!.children.construct[pathComp.callId] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
+                if (!t!.children.construct[pathComp.callId!]) {
+                    t!.children.construct[pathComp.callId!] = { p: pathComp, children: { call: {}, construct: {}, arg: {}, accessProp: {}, writeProp: {} }, type: type, order: order++, parent: t! };
                 }
-                t = t!.children.construct[pathComp.callId]!;
+                t = t!.children.construct[pathComp.callId!]!;
             }
         }
         logger.info(`Added path: ${JSON.stringify(path)}, type: ${JSON.stringify(type)}`);
@@ -333,13 +333,13 @@ let argv: any = yargs(hideBin(processArgv))
         (currentNode as any)._hash[1] = objectHash((currentNode as any)._hashMap, { excludeKeys: v => v === 'arg' });
         if (currentNode.parent !== null) {
             if (currentNode.p.compType === 'call' || currentNode.p.compType === 'construct') {
-                updateTreeHash(currentNode.parent, currentNode.p.compType as NodeChildType, currentNode.p.callId);
+                updateTreeHash(currentNode.parent, currentNode.p.compType as NodeChildType, currentNode.p.callId!);
             }
             else if (currentNode.p.compType === 'accessProp' || currentNode.p.compType === 'writeProp') {
-                updateTreeHash(currentNode.parent, currentNode.p.compType as NodeChildType, currentNode.p.propName);
+                updateTreeHash(currentNode.parent, currentNode.p.compType as NodeChildType, currentNode.p.propName!);
             }
             else if (currentNode.p.compType === 'arg') {
-                updateTreeHash(currentNode.parent, 'arg', currentNode.p.callId, currentNode.p.argId);
+                updateTreeHash(currentNode.parent, 'arg', currentNode.p.callId!, currentNode.p.argId);
             }
         }
         
@@ -593,12 +593,12 @@ let argv: any = yargs(hideBin(processArgv))
         });
     }
 
-    /* compute the hash for each node for convenience of removing paths */
-    // computeTreeHash(pathTree, []);
+    // compute the hash for each node for convenience of removing paths
+    computeTreeHash(pathTree!, []);
 
-    // if (argv.compress) {
-    //     recursivelyRemovePaths(pathTree);
-    // }
+    if (argv.compress) {
+        recursivelyRemovePaths(pathTree!);
+    }
 
     logger.info('Rho relations: ' + JSON.stringify(rhoRelations));
 

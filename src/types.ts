@@ -1,7 +1,10 @@
-export type PathComp = { compType: 'require', moduleName: string } 
-  | { compType: 'accessProp' | 'writeProp', propName: string }
-  | { compType: 'arg', argId: number, callId: string }
-  | { compType: 'call' | 'construct', callId: string };
+export type PathComp = {
+  compType: 'require' | 'accessProp' | 'writeProp' | 'call' | 'construct' | 'arg',
+  moduleName?: string,
+  propName?: string,
+  argId?: number,
+  callId?: string
+};
 
 
 export type Node = {
@@ -15,6 +18,7 @@ export type Node = {
       writeProp: { [propName: string]: Node}
     },
     p: PathComp,
+    ap?: Path,
     moduleName?: string,
     type: PathType,
     parent: Node | null;
@@ -25,16 +29,16 @@ export type Node = {
 };
 
 
-export type NodeChildType = 'call' | 'new' | 'arg' | 'access' | 'writeProp';
+export type NodeChildType = 'call' | 'new' | 'arg' | 'accessProp' | 'writeProp';
 
 export type PathRelation = [Path, Path];
 
-export type PathType = 'object' | 'string' | 'number' 
+export type PathType = 'object'  
   | 'function' | 'undefined' | 'null' | 'date' | 'array'
   | 'map' | 'set' | 'error' | 'unknown'
-  | {primType: 'string', value: string }
-  | {primType: 'number', value: number | 'Infinity' | 'NaN' }
-  | {primType: 'boolean', value: boolean };
+  | { primType: 'string', value: string }
+  | { primType: 'number', value: number | 'Infinity' | 'NaN' }
+  | { primType: 'boolean', value: boolean };
 
 export type Path = PathComp[];
 
