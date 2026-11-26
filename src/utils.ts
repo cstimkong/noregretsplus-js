@@ -6,32 +6,29 @@ import type { Path, PathType } from './types.js';
 function getType(obj: any): PathType {
     let type = '';
     if (obj === null) {
-        type = 'null';
+        return 'null';
     } else if (obj === undefined) {
-        type = 'undefined';
+        return 'undefined';
     } else if (typeof obj === 'string') {
-        type = 'string';
+        return 'string';
     } else if (typeof obj === 'number') {
-        type = 'number';
+        return 'number';
     } else if (Array.isArray(obj)) {
-        type = 'array';
+        return 'array';
     } else if (obj === true || obj === false) {
-        type = 'boolean';
+        return 'boolean';
     } else if (obj instanceof Set) {
-        type = 'set';
+        return 'set';
     } else if (obj instanceof Map) {
-        type = 'map';
+        return 'map';
     } else if (obj instanceof Error) {
         return 'error';
-    }
-    else if (typeof obj === 'object') {
-        type = 'object';
+    } else if (typeof obj === 'object') {
+        return 'object';
     } else if (typeof obj === 'function') {
-        type = 'function';
+        return 'function';
     }
-
-    return 'error';
-    // return type;
+    throw new Error('Unknown type');
 }
 
 /**
@@ -70,11 +67,12 @@ function getArgumentType(arg: any): PathType {
     }
     if (typeof arg === 'object') {
         return 'object';
-    } else if (typeof arg === 'function') {
+    }
+    else if (typeof arg === 'function') {
         return 'function';
     }
 
-    return 'error';
+    throw new Error('Unknown type');
 }
 
 /**

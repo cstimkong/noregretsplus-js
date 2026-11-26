@@ -593,10 +593,9 @@ let argv: any = yargs(hideBin(processArgv))
         });
     }
 
-    // compute the hash for each node for convenience of removing paths
-    computeTreeHash(pathTree!, []);
-
     if (argv.compress) {
+        // compute the hash for each node for convenience of removing paths
+        computeTreeHash(pathTree!, []);
         recursivelyRemovePaths(pathTree!);
     }
 

@@ -10,8 +10,6 @@ import pino from 'pino';
 import type { Model, Path, PathType, Node, PathComp } from './types.js';
 import assert from 'node:assert';
 
-
-
 const logger = pino(pretty({sync: true}));
 
 let argv: any = yargs().usage('Type regression testing based on a given model')

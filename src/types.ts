@@ -33,7 +33,7 @@ export type NodeChildType = 'call' | 'new' | 'arg' | 'accessProp' | 'writeProp';
 
 export type PathRelation = [Path, Path];
 
-export type PathType = 'object'  
+export type PathType = 'object'  | 'number' | 'string' | 'boolean'
   | 'function' | 'undefined' | 'null' | 'date' | 'array'
   | 'map' | 'set' | 'error' | 'unknown'
   | { primType: 'string', value: string }
